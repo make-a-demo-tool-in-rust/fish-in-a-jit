@@ -32,3 +32,4 @@ pub mod ops;
 #[path="ops_windows.rs"]
 pub mod ops;
 
+pub mod tests;
