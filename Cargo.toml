@@ -1,0 +1,21 @@
+[package]
+name = "fish_in_a_jit"
+version = "0.1.0"
+authors = ["etd <erethedaybreak@gmail.com>"]
+
+[dependencies]
+time = "0.1"
+
+log = "0.3"
+env_logger = "0.3"
+
+serde = "0.9"
+serde_derive = "0.9"
+serde_yaml = "0.6"
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = "0.2"
+kernel32-sys = "0.2"
