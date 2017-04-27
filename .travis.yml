@@ -19,9 +19,9 @@ matrix:
       os: osx
 
 script:
-  - cargo build --verbose
-  - cargo build --bin draw_and_print --verbose
-  - cargo test --verbose
+  - cargo build --verbose --target $TARGET
+  - cargo build --bin draw_and_print --verbose --target $TARGET
+  - cargo test --verbose --target $TARGET
 
 cache: cargo
 before_cache:
