@@ -1,4 +1,4 @@
-#[cfg(all(any(target_os = "linux", target_os = "macos"), target_arch = "x86_64"))]
+#![cfg(all(any(target_os = "linux", target_os = "macos"), target_arch = "x86_64"))]
 
 use std::str;
 use std::convert::TryFrom;

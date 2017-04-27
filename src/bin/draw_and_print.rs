@@ -24,8 +24,6 @@ context:
     jm.fill_jit(&mut dmo.context, &dmo.operators);
     let jit_fn = jm.to_jit_fn();
 
-    // TODO how to test the stdout directly?
-
     print!("\n");
     jit_fn.run(&mut dmo.context);
     print!("\n");

@@ -30,8 +30,10 @@ before_cache:
 
 branches:
   only:
+    - master
     - develop
 
 notifications:
   email:
     on_success: never
+    on_failure: never

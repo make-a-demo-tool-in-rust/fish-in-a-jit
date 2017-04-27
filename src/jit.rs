@@ -1,5 +1,3 @@
-#[cfg(all(any(target_os = "linux", target_os = "macos", target_os = "windows"), target_arch = "x86_64"))]
-
 use std::mem;
 
 #[cfg(target_os = "windows")]

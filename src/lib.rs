@@ -2,6 +2,8 @@
 #![feature(abi_sysv64)]
 #![feature(try_from)]
 
+#![cfg(all(any(target_os = "linux", target_os = "macos", target_os = "windows"), target_arch = "x86_64"))]
+
 #[macro_use]
 extern crate log;
 extern crate env_logger;
