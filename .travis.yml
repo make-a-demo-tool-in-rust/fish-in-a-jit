@@ -11,19 +11,12 @@ rust:
 
 matrix:
   include:
-    # Linux
-    - env: TARGET=x86_64-unknown-linux-gnu
-
-    # OSX
-    - env: TARGET=x86_64-apple-darwin
-      os: osx
-
-    # Rust build channels
     - env: TARGET=x86_64-unknown-linux-gnu
       rust: nightly
+
     - env: TARGET=x86_64-apple-darwin
-      os: osx
       rust: nightly
+      os: osx
 
 script:
   - cargo build --verbose
