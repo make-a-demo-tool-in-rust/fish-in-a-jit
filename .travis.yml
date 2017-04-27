@@ -9,26 +9,23 @@ sudo: required
 rust:
   - nightly
 
+# default env
+env:
+  - TARGET=x86_64-unknown-linux-gnu
+
 matrix:
   include:
-    # Linux
-    - env: TARGET=x86_64-unknown-linux-gnu
-
-    # OSX
-    - env: TARGET=x86_64-apple-darwin
-      os: osx
-
-    # Rust build channels
     - env: TARGET=x86_64-unknown-linux-gnu
       rust: nightly
+
     - env: TARGET=x86_64-apple-darwin
-      os: osx
       rust: nightly
+      os: osx
 
 script:
-  - cargo build --verbose
-  - cargo build --bin draw_and_print --verbose
-  - cargo test --verbose
+  - cargo build --verbose --target $TARGET
+  - cargo build --bin draw_and_print --verbose --target $TARGET
+  - cargo test --verbose --target $TARGET
 
 cache: cargo
 before_cache:
@@ -37,8 +34,10 @@ before_cache:
 
 branches:
   only:
+    - master
     - develop
 
 notifications:
   email:
     on_success: never
+    on_failure: never

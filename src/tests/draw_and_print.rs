@@ -12,11 +12,13 @@ fn draw_and_print() {
         "./target/debug/draw_and_print"
     };
 
-    let output = Command::new(path).output().expect("failed to execute process");
+    let cmd = Command::new(path).output().expect("failed to execute process");
 
-    let hello = output.stdout;
+    let text = String::from("\n     __ ><(([°> _______________________________________\r\n");
 
-    println!("{:?}", hello);
+    let output = String::from_utf8(cmd.stdout).unwrap();
 
-    assert!(false);
+    println!("{}", output);
+
+    assert_eq!(text, output);
 }
