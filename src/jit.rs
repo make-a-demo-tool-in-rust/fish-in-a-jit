@@ -126,8 +126,6 @@ impl JitMemory {
             // Take a pointer
             let raw_addr: *mut winapi::c_void;
 
-            // VirtualAlloc(lpAddress: LPVOID, dwSize: SIZE_T, flAllocationType: DWORD, flProtect: DWORD) -> LPVOID
-
             // Allocate aligned to page size
             raw_addr = kernel32::VirtualAlloc(
                 ptr::null_mut(),
@@ -139,7 +137,7 @@ impl JitMemory {
                 panic!("Couldn't allocate memory.");
             }
 
-            // NOTE no FillMemory() or SecureZeroMemory() in kernel32
+            // NOTE no FillMemory() or SecureZeroMemory() in the kernel32 crate
 
             // Transmute the c_void pointer to a Rust u8 pointer
             addr = mem::transmute(raw_addr);
@@ -524,8 +522,6 @@ impl JitMemory {
 
 // NOTE: Could test if munmap return value is 0 if that's a concern for error
 // handling.
-
-// Function: void * mmap (void *address, size_t length, int protect, int flags, int filedes, off_t offset)
 
 impl Drop for JitMemory {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
