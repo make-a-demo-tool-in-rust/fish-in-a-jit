@@ -1,6 +1,7 @@
 #![feature(link_llvm_intrinsics)]
 #![feature(abi_sysv64)]
 #![feature(try_from)]
+#![allow(dead_code)]
 
 #![cfg(all(any(target_os = "linux", target_os = "macos", target_os = "windows"), target_arch = "x86_64"))]
 
@@ -22,16 +23,7 @@ extern crate kernel32;
 
 pub mod dmo;
 pub mod bytecode;
-pub mod utils;
-
 pub mod jit;
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[path="ops_unix.rs"]
-pub mod ops;
-
-#[cfg(target_os = "windows")]
-#[path="ops_windows.rs"]
-pub mod ops;
+pub mod utils;
 
 pub mod tests;

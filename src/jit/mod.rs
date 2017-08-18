@@ -1,4 +1,5 @@
 use std::mem;
+use std::default::Default;
 
 #[cfg(target_os = "windows")]
 use std::ptr;
@@ -11,9 +12,12 @@ use winapi;
 #[cfg(target_os = "windows")]
 use kernel32;
 
+pub mod ops;
+
 use dmo::Operator as Op;
 use dmo::Context;
-use ops::Ops;
+
+use self::ops::Ops;
 
 extern {
     // Because Ferris says it's good.
@@ -24,23 +28,42 @@ extern {
 // Allocate memory sizes as multiples of 4k page.
 const PAGE_SIZE: usize = 4096;
 
-/// A read-write memory buffer allocated to be filled with bytes of `x86`
-/// instructions.
-pub struct JitMemory {
-    addr: *mut u8,
-    size: usize,
-    /// current position for writing the next byte
-    offset: usize,
-}
-
 /// An executable memory buffer filled with `x86` instructions.
 pub struct JitFn {
     addr: *mut u8,
     size: usize,
 }
 
+/// A read-write memory buffer allocated to be filled with bytes of `x86`
+/// instructions. This is a private struct, use `JitFn::new()`. This way the
+/// allocated memory address is only freed when the JitFn goes out of scope.
+struct JitMemory {
+    addr: *mut u8,
+    size: usize,
+    /// current position for writing the next byte
+    offset: usize,
+}
+
+impl Default for JitFn {
+    fn default() -> JitFn {
+        JitFn {
+            addr: 0 as *mut u8,
+            size: 0,
+        }
+    }
+}
+
 impl JitFn {
+    pub fn new(num_pages: usize, context: &mut Context, operators: &Vec<Op>) -> JitFn {
+        let mut jm: JitMemory = JitMemory::new(num_pages);
+        jm.fill_jit(context, operators);
+        jm.to_jit_fn()
+    }
+
     pub fn run(&self, context: &mut Context) {
+        if self.size == 0 {
+            return;
+        }
         unsafe {
             // type signature of the jit function
             let fn_ptr: extern fn(&mut Context);
@@ -185,7 +208,6 @@ impl JitAssembler for JitMemory {
 
     #[cfg(target_os = "windows")]
     fn to_jit_fn(&mut self) -> JitFn {
-        // VirtualProtect(lpAddress: LPVOID, dwSize: SIZE_T, flNewProtect: DWORD, lpflOldProtect: DWORD) -> BOOL
         unsafe {
             let old_prot: *mut winapi::DWORD = mem::uninitialized();
             kernel32::VirtualProtect(
@@ -204,7 +226,6 @@ impl JitAssembler for JitMemory {
         }
     }
 
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn fill_jit(&mut self, context: &mut Context, operators: &Vec<Op>) {
         // prologue
         self.push_rbp();
@@ -215,6 +236,10 @@ impl JitAssembler for JitMemory {
                 Op::NOOP => (),
 
                 Op::Exit(limit) => {
+                    // FIXME windows JIT craches without this println!()
+                    #[cfg(target_os = "windows")]
+                    println!("Will exit after {} seconds", limit);
+
                     // x86_64 ABI is sysv64, arguments are passed in registers, and
                     // remaining ones are passed on the stack.
                     //
@@ -230,7 +255,7 @@ impl JitAssembler for JitMemory {
 
                     // put the address of the function in rax
                     self.movabs_rax_u64( unsafe { mem::transmute(
-                        Ops::exit as extern "sysv64" fn(&mut Context, f32)
+                        Ops::op_exit as extern "sysv64" fn(&mut Context, f32)
                     ) });
 
                     // rsp must be aligned on a 16-byte boundary before the call
@@ -254,7 +279,7 @@ impl JitAssembler for JitMemory {
                 Op::Print => {
                     self.movabs_rdi_u64( unsafe { mem::transmute(context as *mut _) });
                     self.movabs_rax_u64( unsafe { mem::transmute(
-                        Ops::print as extern "sysv64" fn(&Context)
+                        Ops::op_print as extern "sysv64" fn(&Context)
                     )});
                     self.call_rax();
                 },
@@ -270,7 +295,7 @@ impl JitAssembler for JitMemory {
                     self.movss_xmm_n_f32(0, speed);
 
                     self.movabs_rax_u64( unsafe { mem::transmute(
-                        Ops::draw as extern "sysv64" fn(&mut Context, u8, u8, f32)
+                        Ops::op_draw as extern "sysv64" fn(&mut Context, u8, u8, f32)
                     )});
                     self.call_rax();
                 },
@@ -282,7 +307,7 @@ impl JitAssembler for JitMemory {
                     self.movabs_rsi_u64(charcode as u64);
 
                     self.movabs_rax_u64( unsafe { mem::transmute(
-                        Ops::clear as extern "sysv64" fn(&mut Context, u32)
+                        Ops::op_clear as extern "sysv64" fn(&mut Context, u32)
                     )});
                     self.call_rax();
                 },
@@ -292,64 +317,6 @@ impl JitAssembler for JitMemory {
         // epilogue
         self.mov_rsp_rbp();
         self.pop_rbp();
-        self.ret();
-    }
-
-    #[cfg(target_os = "windows")]
-    fn fill_jit(&mut self, context: &mut Context, operators: &Vec<Op>) {
-        // prologue
-        // we just have to adjust for a 16 byte aligned rsp for call
-        self.sub_rsp_u8(8);
-
-        for op in operators.iter() {
-            match *op {
-                Op::NOOP => (),
-
-                Op::Exit(limit) => {
-                    self.movabs_rcx_u64( unsafe { mem::transmute(context as *mut _) });
-                    self.movss_xmm_n_f32(1, limit);
-
-                    self.movabs_rax_u64( unsafe { mem::transmute(
-                        Ops::exit as extern "C" fn(&mut Context, f32)
-                    ) });
-
-                    self.call_rax();
-                },
-
-                Op::Print => {
-                    self.movabs_rcx_u64( unsafe { mem::transmute(context as *mut _) });
-                    self.movabs_rax_u64( unsafe { mem::transmute(
-                        Ops::print as extern "C" fn(&Context)
-                    )});
-                    self.call_rax();
-                },
-
-                Op::Draw(sprite_idx, offset, speed) => {
-                    self.movabs_rcx_u64( unsafe { mem::transmute(context as *mut _) });
-                    self.movabs_rdx_u64(sprite_idx as u64);
-                    self.movabs_r8_u64(offset as u64);
-                    self.movss_xmm_n_f32(3, speed);
-
-                    self.movabs_rax_u64( unsafe { mem::transmute(
-                        Ops::draw as extern "C" fn(&mut Context, u8, u8, f32)
-                    )});
-                    self.call_rax();
-                },
-
-                Op::Clear(charcode) => {
-                    self.movabs_rcx_u64( unsafe { mem::transmute(context as *mut _) });
-                    self.movabs_rdx_u64(charcode as u64);
-
-                    self.movabs_rax_u64( unsafe { mem::transmute(
-                        Ops::clear as extern "C" fn(&mut Context, u32)
-                    )});
-                    self.call_rax();
-                },
-            }
-        }
-
-        // epilogue
-        self.add_rsp_u8(8);
         self.ret();
     }
 
@@ -426,6 +393,12 @@ impl JitMemory {
         self.push_u64(value);
     }
 
+    pub fn movabs_r9_u64(&mut self, value: u64) {
+        self.push_u8(0x49);
+        self.push_u8(0xb9);
+        self.push_u64(value);
+    }
+
     pub fn movss_xmm_n_f32(&mut self, xmm_n: usize, value: f32) {
         // xmm0 - xmm7 are used to pass floating point arguments
         if xmm_n > 7 {
@@ -440,6 +413,37 @@ impl JitMemory {
         self.push_u8(0xf3);// movss: 0xf3, movsd: 0xf2
         self.push_u8(0x0f);
         self.push_u8(0x10);
+
+        self.select_xmm_n(xmm_n);
+
+        self.add_rsp_u8(8);
+    }
+
+    pub fn movss_xmm_n_f64(&mut self, xmm_n: usize, value: f64) {
+        // xmm0 - xmm7 are used to pass floating point arguments
+        if xmm_n > 7 {
+            return;
+        }
+
+        // there is no push imm64, so push the value from a register
+        self.movabs_rax_u64(unsafe { mem::transmute(value) });
+        self.push_rax();
+
+        // movsd xmm0, QWORD PTR [rsp]
+        self.push_u8(0xf2);
+        self.push_u8(0x0f);
+        self.push_u8(0x10);
+
+        self.select_xmm_n(xmm_n);
+
+        self.add_rsp_u8(8);
+    }
+
+    /// Not public. Only for use in other jit assembly functions.
+    fn select_xmm_n(&mut self, xmm_n: usize) {
+        if xmm_n > 7 {
+            return;
+        }
 
         match xmm_n {
             0 => {self.push_u8(0x04);// xmm0: 04 24
@@ -468,8 +472,6 @@ impl JitMemory {
 
             _ => {},
         }
-
-        self.add_rsp_u8(8);
     }
 
     pub fn push_rax(&mut self) {
@@ -522,18 +524,6 @@ impl JitMemory {
 
 // NOTE: Could test if munmap return value is 0 if that's a concern for error
 // handling.
-
-impl Drop for JitMemory {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    fn drop(&mut self) {
-        unsafe { libc::munmap(self.addr as *mut _, self.size); }
-    }
-
-    #[cfg(target_os = "windows")]
-    fn drop(&mut self) {
-        unsafe { kernel32::VirtualFree(self.addr as *mut _, 0, winapi::MEM_RELEASE); }
-    }
-}
 
 impl Drop for JitFn {
     #[cfg(any(target_os = "linux", target_os = "macos"))]

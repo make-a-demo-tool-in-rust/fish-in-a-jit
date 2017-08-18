@@ -17,11 +17,13 @@ impl Bytecode for Dmo {
         // - [u8]: sprite
         // ...
 
-        res.push(self.context.sprites.len() as u8);
+        let sprites = self.get_sprites();
+
+        res.push(sprites.len() as u8);
 
         // ASCII sprites can be unicode UTF-32, so expect the 4-byte char
         // instead of u8
-        for sprite in self.context.sprites.iter() {
+        for sprite in sprites.iter() {
             // length in chars, not in bytes
             res.push(sprite.chars().count() as u8);
 
@@ -37,9 +39,11 @@ impl Bytecode for Dmo {
         // - u8: opcode
         // - []: arguments of different types, but we always know how many and what kind there are
 
-        res.push(self.operators.len() as u8);
+        let operators = self.get_operators();
 
-        for op in self.operators.iter() {
+        res.push(operators.len() as u8);
+
+        for op in operators.iter() {
             use dmo::Operator::*;
             match *op {
                 NOOP => {},
@@ -118,10 +122,7 @@ impl Bytecode for Dmo {
             n_operators -= 1;
         }
 
-        Dmo {
-            context: context,
-            operators: operators,
-        }
+        Dmo::new(context, operators)
     }
 }
 
